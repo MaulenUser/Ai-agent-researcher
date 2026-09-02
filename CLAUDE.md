@@ -1,20 +1,5 @@
 # Инструкции для AI-агентов — Macroprud (Regulatory Research Agent)
 
-## Точка входа в документацию
-
-Рабочая документация проекта: **[docs2/README.md](docs2/README.md)**
-
-## Обязательное чтение перед изменением кода
-
-Прочитать в этом порядке:
-
-1. [docs2/README.md](docs2/README.md) — контекст, приоритет источников, статусы, границы проекта.
-2. [docs2/01_PRODUCT/open-questions.md](docs2/01_PRODUCT/open-questions.md) — что **нельзя** решать самостоятельно.
-3. [docs2/03_IMPLEMENTATION/status.md](docs2/03_IMPLEMENTATION/status.md) — текущее состояние, что заблокировано, что можно делать.
-4. Документ конкретной задачи — карточка `T-xxx` в [docs2/03_IMPLEMENTATION/tasks.md](docs2/03_IMPLEMENTATION/tasks.md) и документы, перечисленные в её поле «Документация».
-
-Готовые формулировки задач для сессий — [docs2/PROMPTS.md](docs2/PROMPTS.md).
-
 ## Правила работы с неопределённостью
 
 **При неопределённости нельзя самостоятельно выбирать бизнес-решение.**

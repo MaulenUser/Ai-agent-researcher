@@ -1,0 +1,123 @@
+# Правила классификации ссылок. Порядок применения задан в app/taxonomy.py.
+# Совпадение — по границам токенов (matches_keyword): `resolution` совпадает с
+# `/resolution/` и `resolution-of-the-board`, но не с подстрокой внутри слова.
+# Множественное число учитывается: decision → decisions, methodology → methodologies.
+# Исключение — navigation.anchors:
+# точное совпадение anchor с navigation.anchors отменяет правило 1
+# ("Cookie Guidelines" не должен стать HIGH_VALUE из-за подстроки "guideline").
+version: 1
+
+# P-0: такие ссылки вообще не классифицируются (link-taxonomy.md §5 P-0).
+ignore_extensions: [.jpg, .jpeg, .png, .gif, .svg, .css, .js, .ico, .woff, .woff2]
+
+# P-2: признак чужой темы в URL/anchor побеждает anchor text (link-taxonomy.md §5 P-2).
+unrelated_topic:
+  patterns:
+    - museum
+    - exhibition
+    - visitor
+    - numismatic
+    - banknote-gallery
+    - sponsorship
+    - art collection
+    - procurement
+    - tender
+    - career
+    - vacancy
+
+# P-5: чужая предметная область регулятора (link-taxonomy.md §5 P-5).
+# Не срабатывает, если в ссылке есть термин темы исследования (topic_match = direct).
+foreign_domains:
+  patterns:
+    - monetary policy
+    - monetary-policy
+    - inflation
+    - payment system
+    - payment-system
+    - /payments
+    - banknotes and coins
+    - banknotes-and-coins
+    - foreign exchange
+    - reserve-management
+    - deposit insurance
+    - /insurance
+    - /supervision
+    - /statistics
+    - /education
+    - /lending
+
+# Правило 1 — явный HIGH_VALUE по тексту ссылки.
+high_value:
+  anchors:
+    - methodology
+    - methodological
+    - decision
+    - official information
+    - financial stability report
+    - macroprudential report
+    - press release
+    - consultation
+    - opinion
+    - guideline
+    - systemic risk map
+
+# Правило 2 — явный тип регулятивного документа по URL.
+document_types:
+  url_patterns:
+    - methodology
+    - decision
+    - resolution
+    - report
+    - review
+    - assessment
+    - guideline
+    - consultation
+    - opinion
+    - press-release
+    - official-information
+
+# Правило 3 — расширение файла повышает ценность.
+documents:
+  extensions:
+    - .pdf
+    - .xlsx
+    - .docx
+
+# Правило 4 — вероятно полезные разделы. Стоит выше NAVIGATION намеренно:
+# "Research papers" в меню остаётся кандидатом, а не отбрасывается.
+potentially_relevant:
+  anchors:
+    - related links
+    - related documents
+    - research paper
+
+  # Обобщённые названия разделов: в контенте — кандидат, в меню — навигация
+  # (link-taxonomy.md §5 P-3: «Publications в основном меню → NAVIGATION»).
+  section_anchors:
+    - publications
+    - archive
+
+# Правило 5 — глобальная навигация сайта (P-3).
+navigation:
+  anchors:
+    - home
+    - contact
+    - contacts
+    - sitemap
+    - privacy
+    - cookie
+    - cookie guidelines
+    - careers
+    - accessibility
+    - search
+    - login
+    - newsletter
+
+  url_patterns:
+    - /contact
+    - /contacts
+    - /privacy
+    - /cookie
+    - /career
+    - /sitemap
+    - /search

@@ -1,0 +1,8 @@
+httpx
+truststore
+beautifulsoup4
+lxml
+lxml_html_clean
+trafilatura
+PyYAML
+pytest
