@@ -1,6 +1,6 @@
 # Контекст проекта Macroprud
 
-Дата последнего обновления: **2026-09-01**.
+Дата последнего обновления: **2026-09-02**.
 
 Файл описывает, что делается, зачем и в каком состоянии находится код.
 Формальные требования — в `source/постановка задач.md` и `docs2/`.
@@ -65,7 +65,11 @@ HIGH_VALUE 15 | POTENTIALLY_RELEVANT 16 | NAVIGATION 67 | IRRELEVANT 42 | OTHER 
 Отфильтрованы: `Cookie Guidelines`, `Contact Us`, `Careers`, `Museum`,
 `Payment Systems Report`, `Publications` в меню.
 
-Тесты: `python -m pytest -q` → **48 passed** (запуск выполнен фактически).
+Тесты: `py -3.10 -m pytest -q` → **48 passed** (перепроверено 2026-09-02).
+
+`python -m pytest -q` **падает**: `ModuleNotFoundError: No module named 'yaml'`.
+`.venv/` в корне — Python 3.14.2 без зависимостей и при этом интерпретатор по
+умолчанию; зависимости стоят в глобальном 3.10. Окружение подлежит починке.
 
 ## 4. Источник правил классификации
 
@@ -87,7 +91,7 @@ HIGH_VALUE 15 | POTENTIALLY_RELEVANT 16 | NAVIGATION 67 | IRRELEVANT 42 | OTHER 
 
 ## 5. Решения, принятые без БА
 
-Требуют подтверждения. До подтверждения считать их временными.
+**Заведены как OQ 2026-09-02:** [OQ-031](docs2/01_PRODUCT/open-questions.md#oq-031), [OQ-032](docs2/01_PRODUCT/open-questions.md#oq-032), [OQ-033](docs2/01_PRODUCT/open-questions.md#oq-033), [OQ-034](docs2/01_PRODUCT/open-questions.md#oq-034) — по одному на каждый пункт ниже. Пятое, `same_domain`, попадает в уже открытый [OQ-013](docs2/01_PRODUCT/open-questions.md#oq-013). До ответов считать их временными; расширять эти участки нельзя.
 
 1. **`Cookie Guidelines` → `NAVIGATION`.** Подстрока `guideline` из `high_value`
    сработала бы раньше навигации. Введено исключение: точное совпадение anchor
@@ -120,19 +124,35 @@ CLI-аргументы, логирование, кэш, тестовый дат�
   в `app/main.py` стоит `sys.stdout.reconfigure(encoding="utf-8")`.
 - Старой версии `trafilatura` под 3.10 нужен отдельный пакет `lxml_html_clean`.
 
-## 8. Сверка с docs2 не выполнена
+## 8. Сверка с docs2 — выполнена 2026-09-02
 
-Код писался по `link-taxonomy.md` и прямым указаниям в сессии. Не открывались:
-`open-questions.md`, `status.md`, `tasks.md` (карточка T-009), `business-rules.md`,
-`decisions.md`, `business-requirements.md`. Возможные расхождения — в разделе 5.
+Код писался по `link-taxonomy.md` и прямым указаниям в сессии; `open-questions.md`,
+`status.md`, `tasks.md`, `business-rules.md`, `decisions.md`, `business-requirements.md`
+при этом не открывались. 2026-09-01 из `CLAUDE.md` было удалено требование читать
+`docs2/` перед изменением кода.
 
-2026-09-01 из `CLAUDE.md` удалено требование читать `docs2/` перед изменением кода.
+Сверка проведена 2026-09-02. Найдено 11 расхождений кода с документацией и 5 решений,
+принятых вместо БА. Полный перечень с привязкой к строкам —
+[docs2/03_IMPLEMENTATION/status.md](docs2/03_IMPLEMENTATION/status.md), разделы
+«Расхождения кода с документацией» и «Решения, принятые разработчиком вместо БА».
+Статусы задач и GAP приведены в соответствие с фактическим кодом.
+
+Этот файл (`CONTEXT.md`) описывает **что и как работает**. Источник статуса —
+`status.md`; при расхождении верен он.
 
 ## 9. Запуск
 
 ```bash
 cd regulatory-research-agent
-pip install -r requirements.txt
-python -m app.main      # URL задан в app/main.py
-python -m pytest -q
+py -3.10 -m pytest -q        # 48 passed
+py -3.10 -m app.main         # URL задан в app/main.py
 ```
+
+`python` без указания версии сейчас разрешается в пустой `.venv` (3.14.2) и падает.
+Правильная починка — создать venv на поддерживаемой версии и установить в него
+`requirements.txt` (нужны `--trusted-host pypi.org --trusted-host files.pythonhosted.org`
+из-за корпоративного TLS-proxy). Какая версия допустима — [OQ-019](docs2/01_PRODUCT/open-questions.md#oq-019).
+
+**Прогон `app.main` ходит на сайты регуляторов без robots.txt, задержек и
+предписанного User-Agent** (BR-016, BR-017 не реализованы). До приведения
+`fetcher.py` в соответствие реальные прогоны не проводить.
