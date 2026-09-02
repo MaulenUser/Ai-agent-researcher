@@ -1,123 +1,146 @@
-# Правила классификации ссылок. Порядок применения задан в app/taxonomy.py.
-# Совпадение — по границам токенов (matches_keyword): `resolution` совпадает с
-# `/resolution/` и `resolution-of-the-board`, но не с подстрокой внутри слова.
-# Множественное число учитывается: decision → decisions, methodology → methodologies.
-# Исключение — navigation.anchors:
-# точное совпадение anchor с navigation.anchors отменяет правило 1
-# ("Cookie Guidelines" не должен стать HIGH_VALUE из-за подстроки "guideline").
-version: 1
+# Справочник классификации ссылок. Структура — link-taxonomy.md §9.
+# Порядок групп = порядок tie-break (§4): выигрывает группа выше по списку,
+# сильный признак всегда побеждает слабый независимо от порядка.
+#
+# anchor_* сопоставляются по границам токенов с учётом мн. числа:
+# `decision` совпадает с `Previous decisions`, но не с подстрокой внутри слова.
+# url_patterns сопоставляются от границы токена без правой границы:
+# `methodolog` совпадает с `/ccyb-methodology-q4.pdf` и `/methodology/`.
+version: 1.0.0
+updated: 2026-09-02
+owner: project maintainer
 
-# P-0: такие ссылки вообще не классифицируются (link-taxonomy.md §5 P-0).
-ignore_extensions: [.jpg, .jpeg, .png, .gif, .svg, .css, .js, .ico, .woff, .woff2]
+# §3. Нормализация research_question.
+# Список ПЗ дополнен служебными словами (patch по процессу §10):
+# без них токены `it`/`does` дают ложный topic_match.
+stopwords: [the, a, an, of, in, for, and, or, what, is, are, how, which, does, do,
+            it, its, to, on, with, by, at, from, be, this, that, was, were]
 
-# P-2: признак чужой темы в URL/anchor побеждает anchor text (link-taxonomy.md §5 P-2).
-unrelated_topic:
-  patterns:
-    - museum
-    - exhibition
-    - visitor
-    - numismatic
-    - banknote-gallery
-    - sponsorship
-    - art collection
-    - procurement
-    - tender
-    - career
-    - vacancy
+synonyms:
+  ccyb:
+    - countercyclical capital buffer
+    - counter-cyclical capital buffer
+    - ccyb
+    - ccb
+    - standard ccyb rate
+    - positive neutral rate
+    - neutral ccyb rate
+  syrb: [systemic risk buffer, syrb, systemic risk capital buffer]
+  osii: [o-sii, other systemically important institution, d-sib,
+         domestic systemically important bank]
 
-# P-5: чужая предметная область регулятора (link-taxonomy.md §5 P-5).
-# Не срабатывает, если в ссылке есть термин темы исследования (topic_match = direct).
-foreign_domains:
-  patterns:
-    - monetary policy
-    - monetary-policy
-    - inflation
-    - payment system
-    - payment-system
-    - /payments
-    - banknotes and coins
-    - banknotes-and-coins
-    - foreign exchange
-    - reserve-management
-    - deposit insurance
-    - /insurance
-    - /supervision
-    - /statistics
-    - /education
-    - /lending
+# Общая предметная лексика -> topic_match = partial.
+domain_vocabulary:
+  [macroprudential, capital buffer, systemic risk, financial stability,
+   countercyclical, ltv, dsti, dti, lcr, nsfr, capital requirement]
 
-# Правило 1 — явный HIGH_VALUE по тексту ссылки.
-high_value:
-  anchors:
-    - methodology
-    - methodological
-    - decision
-    - official information
-    - financial stability report
-    - macroprudential report
-    - press release
-    - consultation
-    - opinion
-    - guideline
-    - systemic risk map
+# §5 P-4: такой anchor не определяет группу, она берётся из контекста.
+generic_anchors: [download, read more, more, here, click here, link, pdf, open, view]
 
-# Правило 2 — явный тип регулятивного документа по URL.
-document_types:
-  url_patterns:
-    - methodology
-    - decision
-    - resolution
-    - report
-    - review
-    - assessment
-    - guideline
-    - consultation
-    - opinion
-    - press-release
-    - official-information
+extensions:
+  document: [pdf, doc, docx, pptx]
+  data:     [xlsx, xls, csv, zip, 7z]
+  ignore:   [jpg, jpeg, png, gif, svg, css, js, ico, woff, woff2, mp4]
 
-# Правило 3 — расширение файла повышает ценность.
-documents:
-  extensions:
-    - .pdf
-    - .xlsx
-    - .docx
+# §5 P-3: контейнеры, в которых работает правило навигации.
+navigation_containers: [nav, header, footer, breadcrumb]
 
-# Правило 4 — вероятно полезные разделы. Стоит выше NAVIGATION намеренно:
-# "Research papers" в меню остаётся кандидатом, а не отбрасывается.
-potentially_relevant:
-  anchors:
-    - related links
-    - related documents
-    - research paper
+# §5 P-5: чужие предметные области регулятора.
+foreign_domains: [monetary policy, payment system, banknotes and coins,
+                  foreign exchange reserve, deposit insurance]
 
-  # Обобщённые названия разделов: в контенте — кандидат, в меню — навигация
-  # (link-taxonomy.md §5 P-3: «Publications в основном меню → NAVIGATION»).
-  section_anchors:
-    - publications
-    - archive
+# §6.3. Три корзины авторитетности.
+domain_authority:
+  authoritative: [cnb.cz, bde.es, mnb.hu, esrb.europa.eu, eba.europa.eu,
+                  eur-lex.europa.eu, bis.org, dnb.nl, nbs.rs, bankofengland.co.uk]
+  excluded:      [facebook.com, x.com, twitter.com, linkedin.com, youtube.com,
+                  instagram.com, google-analytics.com, t.me, tiktok.com]
 
-# Правило 5 — глобальная навигация сайта (P-3).
-navigation:
-  anchors:
-    - home
-    - contact
-    - contacts
-    - sitemap
-    - privacy
-    - cookie
-    - cookie guidelines
-    - careers
-    - accessibility
-    - search
-    - login
-    - newsletter
+# §4. Двенадцать семантических групп в порядке tie-break.
+groups:
+  regulatory_decision:
+    rank: primary
+    anchor_strong: [decision, provision, regulation, resolution, legal act, measure]
+    anchor_weak:   [notice, announcement]
+    url_patterns:  [decision, resolution, legal, regulation]
 
-  url_patterns:
-    - /contact
-    - /contacts
-    - /privacy
-    - /cookie
-    - /career
-    - /sitemap
-    - /search
+  methodology:
+    rank: primary
+    anchor_strong: [methodology, methodological, methodological framework,
+                    technical note, framework, annex]
+    anchor_weak:   [approach, explanatory note]
+    url_patterns:  [methodolog, framework]
+
+  official_information:
+    rank: primary
+    anchor_strong: [official information, press release, opinion, statement,
+                    recommendation]
+    # guidelines — слабый признак: иначе "Cookie Guidelines" перебивает навигацию
+    anchor_weak:   [guideline, news, communication]
+    url_patterns:  [press-release, official-information, opinion, guideline,
+                    recommendation]
+
+  financial_report:
+    rank: primary
+    anchor_strong: [financial stability report, macroprudential report,
+                    annual report, review]
+    anchor_weak:   [report, bulletin]
+    url_patterns:  [fsr, report, review]
+
+  consultation:
+    rank: primary
+    anchor_strong: [consultation, consultation paper, call for advice]
+    anchor_weak:   [feedback, comments]
+    url_patterns:  [consultation]
+
+  research:
+    rank: primary
+    anchor_strong: [research paper, working paper, occasional paper, study]
+    anchor_weak:   [paper, analysis]
+    url_patterns:  [research, working-paper]
+
+  data:
+    rank: secondary
+    anchor_strong: [data, statistics, time series, rate, indicator]
+    anchor_weak:   [figures, table]
+    url_patterns:  [statistics, data]
+
+  archive:
+    rank: secondary
+    anchor_strong: [archive, previous decision, past release, history]
+    anchor_weak:   [previous, earlier]
+    url_patterns:  [archive, history]
+
+  topic_landing:
+    rank: secondary
+    anchor_strong: [financial stability, macroprudential policy, capital buffer,
+                    systemic risk]
+    anchor_weak:   []
+    url_patterns:  [financial-stability, macroprudential]
+
+  related_material:
+    rank: secondary
+    anchor_strong: [related document, related publication, related link,
+                    related material, see also, further reading]
+    anchor_weak:   [publications, more information, links]
+    url_patterns:  []
+
+  navigation:
+    rank: navigation
+    anchor_strong: [home, contact, about us, career, vacancy, language, privacy,
+                    sitemap, search, login, terms, accessibility, cookie, rss,
+                    subscribe, newsletter]
+    anchor_weak:   []
+    url_patterns:  [contact, career, vacanc, privacy, cookie, sitemap, search,
+                    login, accessibility, rss, subscribe, newsletter]
+
+  unrelated_topic:
+    rank: unrelated
+    # careers здесь НЕТ: ПЗ §9 относит их к NAVIGATION (LC-12)
+    anchor_strong: [museum, exhibition, visitor centre, tour, numismatic, coin,
+                    banknote gallery, sponsorship, sport, art collection,
+                    procurement, tender]
+    anchor_weak:   []
+    # P-2: эти шаблоны в URL побеждают anchor text
+    url_patterns:  [museum, exhibition, numismatic, banknote-gallery, sponsorship,
+                    procurement, tender, art-collection]

@@ -1,19 +1,17 @@
-"""Классификация ссылок по правилам config/link_taxonomy.yaml.
+"""Классификация ссылок по спецификации docs2/01_PRODUCT/link-taxonomy.md v1.0.0.
 
-Порядок правил зафиксирован и не переставляется:
+Схема §0: признаки -> семантическая группа (§4) -> класс (матрица §6).
+Класс — функция группы и тематического совпадения с research_question, а не
+свойство строки anchor text.
 
-P-0. ссылка не классифицируется вовсе (картинки, стили, скрипты)
-P-2/P-5. чужая тема в URL/anchor            → IRRELEVANT
-1. explicit HIGH_VALUE      — anchor из high_value
-2. explicit document type   — тип документа в URL (+ расширение файла)
-3. relevant PDF/document    — расширение .pdf/.xlsx/.docx
-4. POTENTIALLY_RELEVANT     — anchor из potentially_relevant
-5. NAVIGATION               — глобальная навигация (P-3)
-6. OTHER
+Порядок правил §5: P-0, P-1, P-2, P-4, P-3, P-5, P-6.
 
-Смысл порядка: methodology.pdf, лежащий в меню, остаётся HIGH_VALUE и не
-становится NAVIGATION из-за родительского блока. P-2/P-5 стоят выше правил
-1-3 по link-taxonomy.md §5: признак чужой темы в URL надёжнее текста ссылки.
+Единственное отклонение от нумерации §5 — P-4 (разрешение обобщённого anchor
+по контексту) выполняется до P-3. Иначе LC-17 недостижим: P-3 сработал бы на
+`More information` в подвале и вернул NAVIGATION, тогда как §12 ожидает
+UNKNOWN. P-4 не назначает класс, он вычисляет признаки, от которых зависит
+предусловие P-3 («группа»), поэтому обязан идти раньше. Зафиксировать как
+уточнение §5 при следующем возврате к БА.
 """
 
 import re
@@ -26,30 +24,35 @@ import yaml
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "link_taxonomy.yaml"
 RULES = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
+GROUPS = RULES["groups"]
+EXTENSIONS = RULES["extensions"]
+AUTHORITY = RULES["domain_authority"]
+
 CANDIDATE_CLASSES = {"HIGH_VALUE", "POTENTIALLY_RELEVANT"}
 
-STOPWORDS = {"the", "and", "for", "with", "from", "rate", "hu", "mnb"}
+# §6. Матрица «ранг группы x тематическое совпадение». Структура таксономии,
+# а не справочник: её изменение — возврат к БА (§8), поэтому она в коде.
+MATRIX = {
+    "primary":    {"direct": "HIGH_VALUE", "partial": "HIGH_VALUE", "none": "POTENTIALLY_RELEVANT"},
+    "secondary":  {"direct": "HIGH_VALUE", "partial": "POTENTIALLY_RELEVANT", "none": "POTENTIALLY_RELEVANT"},
+    "navigation": {"direct": "POTENTIALLY_RELEVANT", "partial": "NAVIGATION", "none": "NAVIGATION"},
+    "unrelated":  {"direct": "UNKNOWN", "partial": "IRRELEVANT", "none": "IRRELEVANT"},
+    None:         {"direct": "POTENTIALLY_RELEVANT", "partial": "POTENTIALLY_RELEVANT", "none": "UNKNOWN"},
+}
 
 
-def topic_terms(title: str) -> set[str]:
-    """Термины темы страницы — пока лексически из title/h1, без LLM."""
-    return {w for w in re.findall(r"[a-z]{4,}", title.lower()) if w not in STOPWORDS}
-
+# --- сопоставление строк (§11: подстрока и шаблон, а не точное равенство) ---
 
 @lru_cache(maxsize=None)
-def _pattern(keyword: str) -> re.Pattern:
-    """Ключевое слово → regex по границам токенов.
+def _anchor_re(keyword: str) -> re.Pattern:
+    """Ключевое слово -> regex по границам токенов с наивным мн. числом.
 
-    Разделителями считаются любые не-буквенно-цифровые символы, поэтому
-    `/resolution/`, `resolution-of-the-board` и `Resolution on the CCyB rate`
-    совпадают, а `mind` с `ind` — нет.
+    `/resolution/`, `resolution-of-the-board` и `Resolution on the rate`
+    совпадают, `mind` с `ind` — нет, `decision` с `decisions` — да.
     """
     words = re.findall(r"[a-z0-9]+", keyword.lower())
-
     parts = [re.escape(w) for w in words]
 
-    # ponytail: наивные множественные числа (decision(s), guideline(s),
-    # methodolog(y|ies)). Стеммер — если появятся другие формы.
     last = words[-1]
     parts[-1] = (
         re.escape(last[:-1]) + "(?:y|ies)" if last.endswith("y")
@@ -59,120 +62,201 @@ def _pattern(keyword: str) -> re.Pattern:
     return re.compile(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(parts) + r"(?![a-z0-9])")
 
 
+@lru_cache(maxsize=None)
+def _url_re(pattern: str) -> re.Pattern:
+    """Шаблон URL — от границы токена, но без правой границы:
+    `methodolog` обязан совпасть с `/letoltes/ccyb-methodology-q42024-en.pdf`."""
+    words = re.findall(r"[a-z0-9]+", pattern.lower())
+
+    return re.compile(r"(?<![a-z0-9])" + r"[^a-z0-9]+".join(re.escape(w) for w in words))
+
+
 def matches_keyword(text: str, keyword: str) -> bool:
-    return bool(_pattern(keyword).search(text.lower()))
+    return bool(_anchor_re(keyword).search(text.lower()))
 
 
-def _first_match(keywords: list[str], text: str) -> str | None:
-    return next((k for k in keywords if matches_keyword(text, k)), None)
+def _first(keywords, text: str, matcher=matches_keyword) -> str | None:
+    return next((k for k in keywords if matcher(text, k)), None)
 
+
+def _url_hit(path: str, patterns) -> str | None:
+    return next((p for p in patterns if _url_re(p).search(path.lower())), None)
+
+
+# --- §3. research_question -> Q (термины вопроса) и V (предметная лексика) ---
+
+@lru_cache(maxsize=None)
+def normalize_question(question: str) -> frozenset[str]:
+    tokens = [t for t in re.findall(r"[a-z0-9-]+", question.lower())
+              if t not in RULES["stopwords"]]
+
+    terms = set(tokens)
+    ngrams = set(tokens) | {" ".join(p) for p in zip(tokens, tokens[1:])}
+
+    for key, synonyms in RULES["synonyms"].items():
+        family = {key.lower()} | {s.lower() for s in synonyms}
+
+        if ngrams & family:
+            terms |= family
+
+    return frozenset(terms)
+
+
+VOCABULARY = frozenset(RULES["domain_vocabulary"])
+
+
+def _topic_match(direct_text: str, weak_text: str, q: frozenset[str]) -> str:
+    """§3 + §6.2: заголовок и URL дают direct, окружение и тема страницы — только partial."""
+    if _first(q, direct_text):
+        return "direct"
+
+    if _first(VOCABULARY, direct_text) or _first(q | VOCABULARY, weak_text):
+        return "partial"
+
+    return "none"
+
+
+# --- §4. Группа ---
 
 def _extension(path: str) -> str | None:
-    return next((e for e in RULES["documents"]["extensions"] if path.endswith(e)), None)
+    return path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else None
 
+
+def _match_group(anchor: str, path: str, ext: str | None) -> tuple[str, int] | None:
+    """Возвращает (имя группы, сила признака: 2 сильный / 1 слабый).
+
+    Tie-break §4: сильный побеждает слабый, при равной силе — порядок групп.
+    """
+    best = None
+
+    for name, group in GROUPS.items():
+        if _first(group["anchor_strong"], anchor) or _url_hit(path, group["url_patterns"]):
+            strength = 2
+        elif _first(group["anchor_weak"], anchor):
+            strength = 1
+        else:
+            continue
+
+        # §6.1: pdf повышает слабый признак документа до сильного
+        if strength == 1 and ext in EXTENSIONS["document"]:
+            strength = 2
+
+        if best is None or strength > best[1]:
+            best = (name, strength)
+
+    # §6.1: xlsx/csv/zip принудительно назначают группу data, если сильнее не нашлось
+    if best is None and ext in EXTENSIONS["data"]:
+        return ("data", 1)
+
+    return best
+
+
+# --- P-0 ---
 
 def is_ignored(url: str) -> bool:
-    """P-0."""
-    path = urlparse(url).path.lower()
+    parsed = urlparse(url)
 
-    return any(path.endswith(e) for e in RULES["ignore_extensions"])
+    if parsed.scheme not in {"http", "https"}:
+        return True
+
+    return _extension(parsed.path.lower()) in EXTENSIONS["ignore"]
 
 
-def classify(link: dict, topic: set[str] = frozenset()) -> dict:
-    """Возвращает {"class": ..., "reason": ...}.
+def _bucket(host: str, bucket: str) -> str | None:
+    return next((d for d in AUTHORITY[bucket] if host == d or host.endswith("." + d)), None)
 
-    reason нужен для отладки crawler'а: по нему видно, почему документ
-    не был открыт или, наоборот, попал в кандидаты.
+
+def classify(link: dict, research_question: str = "", source_page_topic: str = "") -> dict:
+    """Возвращает {"class", "rule", "reason"}.
+
+    rule — идентификатор сработавшего правила §5/§6, без него неисполним
+    процесс обновления справочника §10 и не проверяется критерий §12.3
+    («ни один IRRELEVANT не выдан по остаточному принципу»).
     """
-    anchor = link["anchor_text"].strip().lower()
-    url = link["url"].lower()
-    path = urlparse(url).path
+    context = link.get("context") or {}
+    anchor = link["anchor_text"]
+    url = link["url"]
+    parsed = urlparse(url)
+    path = parsed.path.lower()
     ext = _extension(path)
-    haystack = f"{path} {anchor}"
-    nav = RULES["navigation"]
+    heading = context.get("section_heading", "")
+    surrounding = context.get("surrounding_text", "")
+    container = (context.get("dom_container") or "").lower()
 
-    # topic_match = direct: термин темы встречается в URL или в тексте ссылки
-    on_topic = _first_match(sorted(topic), haystack) if topic else None
+    q = normalize_question(research_question)
 
-    # P-2. Чужая тема в URL/anchor побеждает anchor text
-    hit = _first_match(RULES["unrelated_topic"]["patterns"], haystack)
-    if hit and not on_topic:
-        return {"class": "IRRELEVANT", "reason": f"matched unrelated topic: {hit}"}
+    # Тема страницы-источника (F-09) поднимает topic_match только для ссылок
+    # в контенте: меню и подвал повторяются на всех страницах сайта и темы
+    # конкретной страницы не наследуют.
+    inherited = "" if container in RULES["navigation_containers"] else source_page_topic
 
-    # P-5. Чужая предметная область регулятора
-    hit = _first_match(RULES["foreign_domains"]["patterns"], haystack)
-    if hit and not on_topic:
-        return {"class": "IRRELEVANT", "reason": f"matched foreign policy domain: {hit}"}
+    topic = _topic_match(f"{anchor} {path} {heading}", f"{surrounding} {inherited}", q)
 
-    # 1. explicit HIGH_VALUE по тексту ссылки
-    if anchor not in nav["anchors"]:
-        hit = _first_match(RULES["high_value"]["anchors"], anchor)
-        if hit:
-            return {"class": "HIGH_VALUE", "reason": f"matched high-value anchor: {hit}"}
-
-    # 2. explicit тип регулятивного документа в URL
-    hit = _first_match(RULES["document_types"]["url_patterns"], url)
+    # P-1. Исключённый внешний домен
+    hit = _bucket(parsed.netloc.lower(), "excluded")
     if hit:
-        # Раздел сайта в меню без темы исследования — это навигация, а не документ.
-        # Файл (pdf/xlsx/docx) через это исключение не проходит: link-taxonomy.md §6.1.
-        if link.get("in_nav") and not on_topic and not ext:
-            return {
-                "class": "NAVIGATION",
-                "reason": f"site section '{hit}' inside <{link['in_nav']}> without topic match",
-            }
+        return {"class": "IRRELEVANT", "rule": "P-1", "reason": f"excluded domain: {hit}"}
 
-        reason = f"matched url pattern: {hit}" + (f" + {ext.lstrip('.')}" if ext else "")
-        return {"class": "HIGH_VALUE", "reason": reason}
-
-    # 3. документ без тематического признака — кандидат, но не HIGH_VALUE
-    if ext:
-        return {
-            "class": "POTENTIALLY_RELEVANT",
-            "reason": f"document extension without topic signal: {ext.lstrip('.')}",
-        }
-
-    # 4. вероятно полезные разделы — намеренно выше NAVIGATION
-    hit = _first_match(RULES["potentially_relevant"]["anchors"], anchor)
+    # P-2. Признак чужой темы в URL path побеждает anchor text
+    hit = _url_hit(path, GROUPS["unrelated_topic"]["url_patterns"])
     if hit:
-        return {"class": "POTENTIALLY_RELEVANT", "reason": f"matched anchor: {hit}"}
+        if _first(q, path):
+            return {"class": "UNKNOWN", "rule": "P-2 exception",
+                    "reason": f"unrelated topic '{hit}' and question term both in url path"}
 
-    hit = _first_match(RULES["potentially_relevant"]["section_anchors"], anchor)
-    if hit:
-        if link.get("in_nav") and not on_topic:
-            return {
-                "class": "NAVIGATION",
-                "reason": f"generic section '{hit}' inside <{link['in_nav']}> without topic match",
-            }
+        return {"class": "IRRELEVANT", "rule": "P-2",
+                "reason": f"unrelated topic in url path: {hit}"}
 
-        return {"class": "POTENTIALLY_RELEVANT", "reason": f"matched anchor: {hit}"}
+    # P-4. Обобщённый или пустой anchor разрешается по контексту
+    generic = not anchor.strip() or _first(RULES["generic_anchors"], anchor)
+    if generic:
+        group = (_match_group(heading, "", ext)
+                 or _match_group(surrounding, "", ext)
+                 or _match_group("", path, ext))
 
-    # 5. глобальная навигация (P-3)
-    hit = _first_match(nav["anchors"], anchor)
-    if hit:
-        return {
-            "class": "NAVIGATION",
-            "reason": f"matched global navigation anchor: {link['anchor_text'] or hit}",
-        }
+        if group is None:
+            return {"class": "UNKNOWN", "rule": "P-4",
+                    "reason": f"generic anchor '{anchor or ''}' and no group in heading, "
+                              "surrounding text or url"}
+    else:
+        group = _match_group(anchor, path, ext)
 
-    hit = _first_match(nav["url_patterns"], path)
-    if hit:
-        return {"class": "NAVIGATION", "reason": f"matched navigation url pattern: {hit}"}
+    name, _ = group if group else (None, 0)
+    rank = GROUPS[name]["rank"] if name else None
 
-    # P-3: контейнер nav/header/footer + нет содержательных признаков.
-    # Документ (pdf/xlsx/docx) сюда не доходит — он уже отработан правилом 3.
-    if link.get("in_nav") and not on_topic:
-        return {
-            "class": "NAVIGATION",
-            "reason": f"inside <{link['in_nav']}> without content signal",
-        }
+    # P-3. Служебная навигация
+    if (container in RULES["navigation_containers"]
+            and name in {None, "navigation", "related_material"}
+            and topic != "direct"
+            and ext not in EXTENSIONS["document"]):
+        return {"class": "NAVIGATION", "rule": "P-3",
+                "reason": f"group '{name}' inside <{container}> without direct topic match"}
 
-    return {"class": "OTHER", "reason": "no rule matched"}
+    # P-5. Чужая предметная область
+    hit = _first(RULES["foreign_domains"], f"{anchor} {path}")
+    if hit and topic != "direct":
+        return {"class": "IRRELEVANT", "rule": "P-5",
+                "reason": f"foreign policy domain '{hit}' with topic_match = {topic}"}
+
+    # P-6. Матрица §6
+    cls = MATRIX[rank][topic]
+    reason = f"group {name or 'undefined'} ({rank or 'undefined'}) x topic_match {topic}"
+
+    # §6.3. Авторитетность внешнего источника
+    if (cls == "HIGH_VALUE" and not link.get("same_domain", True)
+            and not _bucket(parsed.netloc.lower(), "authoritative")):
+        return {"class": "POTENTIALLY_RELEVANT", "rule": "P-6 + 6.3",
+                "reason": f"{reason}; downgraded: neutral external domain"}
+
+    return {"class": cls, "rule": "P-6", "reason": reason}
 
 
-def classify_all(links: list[dict], topic: set[str] = frozenset()) -> list[dict]:
-    return [link | classify(link, topic) for link in links if not is_ignored(link["url"])]
+def classify_all(links: list[dict], research_question: str = "",
+                 source_page_topic: str = "") -> list[dict]:
+    return [link | classify(link, research_question, source_page_topic)
+            for link in links if not is_ignored(link["url"])]
 
 
 def candidates(links: list[dict]) -> list[dict]:
-    """P-3 filtering: остаются только исследовательские материалы."""
+    """Материалы для обхода. Политика обхода UNKNOWN — за БА (OQ-029)."""
     return [link for link in links if link["class"] in CANDIDATE_CLASSES]

@@ -4,7 +4,7 @@ import sys
 from app.fetcher import fetch_url
 from app.html_parser import parse_html
 from app.link_extractor import extract_links
-from app.taxonomy import candidates, classify_all, topic_terms
+from app.taxonomy import candidates, classify_all
 
 
 URL = (
@@ -12,6 +12,8 @@ URL = (
     "macroprudential-policy/the-macroprudential-toolkit/"
     "countercyclical-capital-buffer-ccyb"
 )
+
+RESEARCH_QUESTION = "What is the current CCyB rate and how is it set?"
 
 
 async def main():
@@ -32,11 +34,10 @@ async def main():
         result["final_url"],
     )
 
-    topic = topic_terms(parsed["title"] or "")
-
     links = classify_all(
         extract_links(result["content"], result["final_url"]),
-        topic,
+        RESEARCH_QUESTION,
+        parsed["title"] or "",
     )
 
     print("\nTITLE:")
@@ -49,11 +50,11 @@ async def main():
     print("\nTEXT:")
     print(parsed["text"][:3000])
 
-    print("\nTOPIC TERMS:", ", ".join(sorted(topic)))
+    print("\nQUESTION:", RESEARCH_QUESTION)
 
     print("\nLINKS:", len(links))
 
-    for name in ("HIGH_VALUE", "POTENTIALLY_RELEVANT", "NAVIGATION", "IRRELEVANT", "OTHER"):
+    for name in ("HIGH_VALUE", "POTENTIALLY_RELEVANT", "NAVIGATION", "IRRELEVANT", "UNKNOWN"):
         print(f"  {name}: {sum(1 for l in links if l['class'] == name)}")
 
     keep = candidates(links)
@@ -62,14 +63,14 @@ async def main():
 
     for link in keep:
         print(f"[{link['class']}] {link['anchor_text'][:60]!r} -> {link['url']}")
-        print(f"    reason: {link['reason']}")
+        print(f"    {link['rule']}: {link['reason']}")
 
     print("\nFILTERED OUT:")
 
     for link in links:
         if link not in keep:
             print(f"[{link['class']}] {link['anchor_text'][:60]!r} -> {link['url']}")
-            print(f"    reason: {link['reason']}")
+            print(f"    {link['rule']}: {link['reason']}")
 
 
 if __name__ == "__main__":

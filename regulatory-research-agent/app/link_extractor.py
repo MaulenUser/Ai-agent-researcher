@@ -1,7 +1,12 @@
 from bs4 import BeautifulSoup
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
-LANDMARKS = {"nav", "footer", "header"}
+# link-taxonomy.md §2.1: dom_container — имя ближайшего семантического контейнера
+LANDMARKS = {"nav", "header", "footer"}
+
+CONTAINERS = {"main", "article", "aside", "table", "li"}
+
+SURROUNDING_TEXT_LIMIT = 300
 
 
 def normalize_url(url: str) -> str:
@@ -15,13 +20,46 @@ def normalize_url(url: str) -> str:
     return urlunparse((p.scheme.lower(), p.netloc.lower(), path, p.params, query, ""))
 
 
-def _context(a) -> tuple[str | None, str]:
-    """Родительский контекст ссылки: landmark-блок и ближайший заголовок выше."""
-    landmark = next((p.name for p in a.parents if p.name in LANDMARKS), None)
+def _container(a) -> str:
+    """Ближайший семантический контейнер.
 
-    heading = a.find_previous(["h1", "h2", "h3", "h4", "h5", "h6"])
+    Навигационные landmark'и ищутся по всей цепочке родителей и побеждают:
+    ссылка внутри <nav><ul><li> — навигация, а не список (§5 P-3).
+    """
+    nearest = "body"
 
-    return landmark, heading.get_text(" ", strip=True) if heading else ""
+    for parent in a.parents:
+        classes = " ".join(parent.get("class", [])).lower()
+
+        if "breadcrumb" in classes:
+            return "breadcrumb"
+
+        if parent.name in LANDMARKS or parent.get("role") == "navigation":
+            return "nav" if parent.get("role") == "navigation" else parent.name
+
+        if nearest == "body" and parent.name in CONTAINERS:
+            nearest = "list" if parent.name == "li" else parent.name
+
+    return nearest
+
+
+def _context(a) -> dict:
+    """Признаки F-06…F-08 (link-taxonomy.md §2.1)."""
+    container = _container(a)
+
+    # Заголовок описывает блок контента. Для ссылки в меню или подвале
+    # ближайший предшествующий h1-h6 — это последний заголовок статьи,
+    # к ней не относящийся: он дал бы ложный topic_match всему футеру.
+    heading = a.find_previous(["h1", "h2", "h3", "h4", "h5", "h6"]) \
+        if container not in LANDMARKS | {"breadcrumb"} else None
+
+    block = a.find_parent(["p", "li", "td", "div", "section", "article"]) or a
+
+    return {
+        "dom_container": container,
+        "section_heading": heading.get_text(" ", strip=True) if heading else "",
+        "surrounding_text": block.get_text(" ", strip=True)[:SURROUNDING_TEXT_LIMIT],
+    }
 
 
 def extract_links(html: bytes, base_url: str) -> list[dict]:
@@ -52,14 +90,11 @@ def extract_links(html: bytes, base_url: str) -> list[dict]:
 
         seen.add((target_url, anchor_text))
 
-        landmark, heading = _context(a)
-
         links.append({
             "url": target_url,
             "anchor_text": anchor_text,
             "same_domain": parsed.netloc == base_domain,
-            "in_nav": landmark,
-            "context": heading,
+            "context": _context(a),
         })
 
     return links

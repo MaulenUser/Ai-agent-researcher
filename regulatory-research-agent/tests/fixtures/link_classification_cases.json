@@ -1,0 +1,113 @@
+[
+  {"id": "LC-01", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "Methodology",
+   "target_url": "https://www.cnb.cz/en/financial-stability/macroprudential-policy/ccyb/methodology.pdf",
+   "surrounding_context": "main / section: How the rate is determined", "expected_class": "HIGH_VALUE"},
+
+  {"id": "LC-02", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "About the bank", "anchor_text": "Methodology",
+   "target_url": "https://www.cnb.cz/en/about_cnb/museum/methodology-of-exhibitions/",
+   "surrounding_context": "main / section: Museum and visitor centre", "expected_class": "IRRELEVANT",
+   "rule": "P-2 — признак чужой темы в URL побеждает anchor text"},
+
+  {"id": "LC-03", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "Download",
+   "target_url": "https://www.cnb.cz/export/sites/cnb/en/files/ccyb-2026-q1.pdf",
+   "surrounding_context": "main / heading: Countercyclical capital buffer methodology",
+   "expected_class": "HIGH_VALUE", "rule": "P-4 — обобщённый anchor разрешается по заголовку"},
+
+  {"id": "LC-04", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Home", "anchor_text": "Publications",
+   "target_url": "https://www.cnb.cz/en/publications/", "surrounding_context": "nav / main menu",
+   "expected_class": "NAVIGATION", "rule": "P-3 — related_material в навигационном контейнере"},
+
+  {"id": "LC-05", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "Related publications",
+   "target_url": "https://www.cnb.cz/en/financial-stability/publications/",
+   "surrounding_context": "main / end of article", "expected_class": "POTENTIALLY_RELEVANT",
+   "rule": "P-3 не применяется — dom_container = main"},
+
+  {"id": "LC-06", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Press releases", "anchor_text": "Press release",
+   "target_url": "https://www.cnb.cz/en/cnb-news/press-releases/CNB-raises-the-countercyclical-buffer-rate/",
+   "surrounding_context": "main / list of releases", "expected_class": "HIGH_VALUE",
+   "rule": "official_information + topic_match = direct по URL"},
+
+  {"id": "LC-07", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Press releases", "anchor_text": "Press release",
+   "target_url": "https://www.cnb.cz/en/cnb-news/press-releases/New-director-of-the-museum/",
+   "surrounding_context": "main / list of releases", "expected_class": "IRRELEVANT", "rule": "P-2"},
+
+  {"id": "LC-08", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Financial stability", "anchor_text": "Financial Stability Report 2026",
+   "target_url": "https://www.bde.es/f/webbe/INF/MenuHorizontal/fsr-2026.pdf",
+   "surrounding_context": "main / list of reports", "expected_class": "HIGH_VALUE"},
+
+  {"id": "LC-09", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Financial stability", "anchor_text": "Capital buffers",
+   "target_url": "https://www.bde.es/wbe/en/areas-actuacion/estabilidad-financiera/capital-buffers/",
+   "surrounding_context": "main / section list", "expected_class": "POTENTIALLY_RELEVANT",
+   "rule": "topic_landing (secondary) + partial"},
+
+  {"id": "LC-10", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "Previous decisions",
+   "target_url": "https://www.mnb.hu/en/financial-stability/ccyb/archive",
+   "surrounding_context": "main / section: Decisions", "expected_class": "HIGH_VALUE",
+   "rule": "archive (secondary) + direct по URL"},
+
+  {"id": "LC-11", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Statistics", "anchor_text": "Data",
+   "target_url": "https://www.mnb.hu/en/statistics/ccyb-rates.xlsx",
+   "surrounding_context": "main / table of indicators", "expected_class": "HIGH_VALUE",
+   "rule": "data (secondary) + direct; загрузка XLSX вне MVP — фильтр загрузчика, не класса"},
+
+  {"id": "LC-12", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Home", "anchor_text": "Careers",
+   "target_url": "https://www.mnb.hu/en/careers", "surrounding_context": "footer",
+   "expected_class": "NAVIGATION", "rule": "ПЗ §9 относит careers к NAVIGATION"},
+
+  {"id": "LC-13", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Home", "anchor_text": "Museum",
+   "target_url": "https://www.mnb.hu/en/the-central-bank/visitor-centre",
+   "surrounding_context": "main / promo block", "expected_class": "IRRELEVANT",
+   "rule": "unrelated_topic, положительный признак"},
+
+  {"id": "LC-14", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Home", "anchor_text": "Monetary policy",
+   "target_url": "https://www.cnb.cz/en/monetary-policy/", "surrounding_context": "main / section list",
+   "expected_class": "IRRELEVANT", "rule": "P-5 — чужая предметная область при topic_match ≠ direct"},
+
+  {"id": "LC-15", "research_question": "How does monetary policy interact with the CCyB?",
+   "source_page_topic": "Home", "anchor_text": "Monetary policy",
+   "target_url": "https://www.cnb.cz/en/monetary-policy/", "surrounding_context": "main / section list",
+   "expected_class": "POTENTIALLY_RELEVANT",
+   "rule": "тот же вход, другой research_question — P-5 не срабатывает. Обязательный парный тест к LC-14"},
+
+  {"id": "LC-16", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "See also",
+   "target_url": "https://www.cnb.cz/en/financial-stability/", "surrounding_context": "aside / sidebar",
+   "expected_class": "POTENTIALLY_RELEVANT"},
+
+  {"id": "LC-17", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "More information",
+   "target_url": "https://www.example-vendor.com/tools/", "surrounding_context": "footer / partner block",
+   "expected_class": "UNKNOWN",
+   "rule": "обобщённый anchor + контекст без группы + неавторитетный внешний домен"},
+
+  {"id": "LC-18", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "Share on LinkedIn",
+   "target_url": "https://www.linkedin.com/shareArticle?url=...", "surrounding_context": "main / share block",
+   "expected_class": "IRRELEVANT", "rule": "P-1 — исключённый внешний домен"},
+
+  {"id": "LC-19", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Countercyclical capital buffer", "anchor_text": "",
+   "target_url": "https://www.esrb.europa.eu/pub/pdf/recommendations/ccyb-recommendation.pdf",
+   "surrounding_context": "main / heading: ESRB recommendation on the countercyclical buffer",
+   "expected_class": "HIGH_VALUE",
+   "rule": "пустой anchor разрешается по заголовку (P-4); внешний авторитетный домен не понижает класс"},
+
+  {"id": "LC-20", "research_question": "What is the current CCyB rate and how is it set?",
+   "source_page_topic": "Financial stability", "anchor_text": "Consultation paper",
+   "target_url": "https://www.eba.europa.eu/consultation/cp-2026-03",
+   "surrounding_context": "main / list", "expected_class": "HIGH_VALUE"}
+]

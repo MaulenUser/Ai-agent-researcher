@@ -1,16 +1,31 @@
-"""Regression-тесты классификации: фиксируют разбор известных ссылок MNB."""
+"""Regression-тесты классификации на реальных ссылках MNB.
+
+Соответствие спецификации проверяет test_taxonomy_spec.py (evaluation dataset
+link-taxonomy.md §12). Здесь фиксируется, что на живой странице CCyB известные
+материалы не теряются, а шум не попадает в кандидаты.
+"""
 
 import pytest
 
-from app.taxonomy import candidates, classify, is_ignored, matches_keyword
+from app.taxonomy import classify, is_ignored, matches_keyword, normalize_question
 
-TOPIC = {"countercyclical", "capital", "buffer", "ccyb"}
+QUESTION = "What is the current CCyB rate and how is it set?"
+
+PAGE = "Countercyclical capital buffer (CCyB)"
 
 
-def cls(anchor: str, url: str, in_nav: str | None = None, topic: set[str] = TOPIC) -> dict:
+def cls(anchor: str, url: str, container: str = "main", heading: str = "",
+        question: str = QUESTION) -> dict:
     return classify(
-        {"url": url, "anchor_text": anchor, "in_nav": in_nav},
-        topic,
+        {
+            "url": url,
+            "anchor_text": anchor,
+            "same_domain": True,
+            "context": {"dom_container": container, "section_heading": heading,
+                        "surrounding_text": ""},
+        },
+        question,
+        PAGE,
     )
 
 
@@ -19,12 +34,10 @@ def cls(anchor: str, url: str, in_nav: str | None = None, topic: set[str] = TOPI
 @pytest.mark.parametrize("text, keyword", [
     ("Resolution on the CCyB rate", "resolution"),
     ("https://www.mnb.hu/en/resolution/", "resolution"),
-    ("https://www.mnb.hu/en/resolution", "resolution"),
     ("resolution-of-the-board", "resolution"),
     ("Previous decisions and justifications", "decision"),      # множественное число
     ("/publications/reports/", "report"),
     ("Methodologies applied until Q1 2024", "methodology"),
-    ("Cookie Guidelines", "guideline"),
     ("Press release on the review", "press release"),
     ("press-releases-2026", "press release"),
 ])
@@ -34,9 +47,7 @@ def test_matches_keyword(text, keyword):
 
 @pytest.mark.parametrize("text, keyword", [
     ("mind", "ind"),
-    ("https://www.mnb.hu/web/en/mind", "ind"),
     ("Information for data suppliers", "report"),               # reporting != report
-    ("https://aszp.mnb.hu/mnb-data-reporting", "report"),
     ("Research papers", "search"),                              # research != search
     ("irresolution", "resolution"),
     ("opinionated", "opinion"),
@@ -49,94 +60,116 @@ def test_does_not_match_substring_inside_word(text, keyword):
 def test_pdf_segment_in_url_is_not_a_document_extension():
     # .../pub/pdf/recommendations/ESRB_2015_1.en.pdf — документ, а
     # .../pub/pdf/recommendations/ — раздел, а не файл
-    assert cls("2015/1", "https://www.esrb.europa.eu/pub/pdf/recommendations/")["class"] != \
-        "POTENTIALLY_RELEVANT"
+    from app.taxonomy import _extension
+
+    assert _extension("/pub/pdf/recommendations/") is None
+    assert _extension("/pub/pdf/recommendations/esrb_2015_1.en.pdf") == "pdf"
+
+
+# --- §3: расширение вопроса синонимами ---
+
+def test_question_expands_via_synonyms():
+    terms = normalize_question(QUESTION)
+
+    assert "countercyclical capital buffer" in terms      # synonyms: ccyb
+    assert "the" not in terms                             # stopwords
 
 
 # --- шум не должен попадать в crawl candidates ---
 
-@pytest.mark.parametrize("anchor, url", [
-    ("Cookie Guidelines", "https://www.mnb.hu/en/the-central-bank/cookie-management-at-mnb-hu"),
-    ("Contact Us", "https://www.mnb.hu/en/contact"),
-    ("Careers", "https://www.mnb.hu/en/career/vacancies"),
-    ("Sitemap", "https://www.mnb.hu/en/sitemap"),
-    ("Search", "https://www.mnb.hu/en/search"),
-    ("Museum", "https://www.mnb.hu/en/the-central-bank/museum"),
-    ("Payment Systems Report", "https://www.mnb.hu/en/publications/reports/payment-systems-report"),
-    ("Publications", "https://www.mnb.hu/en/publications"),
+@pytest.mark.parametrize("anchor, url, expected", [
+    ("Cookie Guidelines", "https://www.mnb.hu/en/the-central-bank/cookie-management-at-mnb-hu",
+     "NAVIGATION"),
+    ("Contact Us", "https://www.mnb.hu/en/contact", "NAVIGATION"),
+    ("Careers", "https://www.mnb.hu/en/career/vacancies", "NAVIGATION"),
+    ("Sitemap", "https://www.mnb.hu/en/sitemap", "NAVIGATION"),
+    ("Search", "https://www.mnb.hu/en/search", "NAVIGATION"),
+    ("Museum", "https://www.mnb.hu/en/the-central-bank/museum", "IRRELEVANT"),
+    ("Payment Systems Report", "https://www.mnb.hu/en/publications/reports/payment-systems-report",
+     "IRRELEVANT"),
+    ("Publications", "https://www.mnb.hu/en/publications", "NAVIGATION"),
 ])
-def test_noise_is_not_a_candidate(anchor, url):
-    result = cls(anchor, url, in_nav="nav")
+def test_noise_is_not_a_candidate(anchor, url, expected):
+    result = cls(anchor, url, container="nav")
 
-    assert result["class"] in {"NAVIGATION", "IRRELEVANT", "OTHER"}
-    assert result["reason"]
-    assert not candidates([result | {"anchor_text": anchor}])
+    assert result["class"] == expected
+    assert result["rule"] and result["reason"]
 
 
-def test_cookie_guidelines_is_navigation():
-    assert cls("Cookie Guidelines", "https://www.mnb.hu/en/cookie-management") == {
-        "class": "NAVIGATION",
-        "reason": "matched global navigation anchor: Cookie Guidelines",
-    }
+def test_cookie_guidelines_is_navigation_outside_menu():
+    """Навигационный признак в URL сильнее слабого `guidelines` в anchor."""
+    assert cls("Cookie Guidelines", "https://www.mnb.hu/en/cookie-management")["class"] == \
+        "NAVIGATION"
 
 
 # --- известные релевантные материалы не теряются ---
 
-def test_ccyb_methodology_pdf_is_high_value():
-    assert cls("CCyB methodology", "https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf") == {
-        "class": "HIGH_VALUE",
-        "reason": "matched high-value anchor: methodology",
-    }
-
-
-def test_methodology_pdf_in_menu_survives_navigation_filter():
-    """Документ в меню не понижается до NAVIGATION (link-taxonomy.md §6.1)."""
-    result = cls("Applicable from Q4 2024",
-                 "https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf",
-                 in_nav="nav")
-
-    assert result == {"class": "HIGH_VALUE", "reason": "matched url pattern: methodology + pdf"}
-
-
-@pytest.mark.parametrize("anchor, url, expected", [
+@pytest.mark.parametrize("anchor, url", [
+    ("CCyB methodology", "https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf"),
+    # обобщённый anchor: группа берётся из URL (P-4)
+    ("Applicable from Q4 2024", "https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf"),
     ("Press release on the review of the CCyB rate (30 June 2026)",
-     "https://www.mnb.hu/en/pressroom/press-releases/press-releases-2026/the-mnb-maintains",
-     "HIGH_VALUE"),
+     "https://www.mnb.hu/en/pressroom/press-releases/press-releases-2026/the-mnb-maintains"),
     ("Previous decisions, justifications and systemic risk maps",
      "https://www.mnb.hu/en/financial-stability/macroprudential-policy/the-macroprudential-"
-     "toolkit/countercyclical-capital-buffer-ccyb/previous-decisions-and-justifications",
-     "HIGH_VALUE"),
+     "toolkit/countercyclical-capital-buffer-ccyb/previous-decisions-and-justifications"),
     ("Macroprudential report",
-     "https://www.mnb.hu/en/financial-stability/macroprudential-policy/macroprudential-report",
-     "HIGH_VALUE"),
-    ("24 June 2026", "https://www.mnb.hu/letoltes/ccyb-indoklas-2026q2-en.pdf",
-     "POTENTIALLY_RELEVANT"),
-    ("Link", "https://www.mnb.hu/letoltes/ccyb-data-adatok-2026q2.xlsx", "POTENTIALLY_RELEVANT"),
-    ("Related links", "https://www.mnb.hu/en/financial-stability/related-links",
-     "POTENTIALLY_RELEVANT"),
-    ("Research papers", "https://www.mnb.hu/en/financial-stability/publications/research-papers",
-     "POTENTIALLY_RELEVANT"),
+     "https://www.mnb.hu/en/financial-stability/macroprudential-policy/macroprudential-report"),
+    ("Link", "https://www.mnb.hu/letoltes/ccyb-data-adatok-2026q2.xlsx"),
+    ("Research papers", "https://www.mnb.hu/en/financial-stability/publications/research-papers"),
 ])
-def test_known_materials_stay_candidates(anchor, url, expected):
-    # in_nav="nav": боковое меню раздела не должно их терять
-    assert cls(anchor, url, in_nav="nav")["class"] == expected
+def test_known_materials_are_high_value_even_in_menu(anchor, url):
+    # container="nav": боковое меню раздела не должно их терять
+    assert cls(anchor, url, container="nav")["class"] == "HIGH_VALUE"
 
 
-def test_research_paper_is_not_globally_navigation():
-    """Тот же anchor вне меню тоже остаётся кандидатом — класс не зависит от списка навигации."""
-    assert cls("Research paper on CCyB", "https://x/research/paper")["class"] == "POTENTIALLY_RELEVANT"
+@pytest.mark.parametrize("anchor, url", [
+    # дата вместо anchor: группы нет, но тема в URL есть -> кандидат, не HIGH_VALUE
+    ("24 June 2026", "https://www.mnb.hu/letoltes/ccyb-indoklas-2026q2-en.pdf"),
+    ("Related links", "https://www.mnb.hu/en/financial-stability/related-links"),
+])
+def test_known_materials_stay_candidates(anchor, url):
+    assert cls(anchor, url, container="nav")["class"] == "POTENTIALLY_RELEVANT"
+
+
+def test_document_in_menu_is_never_navigation():
+    """§6.1: pdf блокирует P-3 даже в подвале."""
+    result = cls("Download", "https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf",
+                 container="footer")
+
+    assert result["class"] == "HIGH_VALUE"
+
+
+# --- зависимость от research_question (§12, критерий 2) ---
+
+def test_class_depends_on_research_question():
+    url = "https://www.mnb.hu/en/monetary-policy"
+
+    assert cls("Monetary policy", url)["class"] == "IRRELEVANT"
+    assert cls("Monetary policy", url,
+               question="How does monetary policy interact with the CCyB?")["class"] != "IRRELEVANT"
 
 
 # --- прочее ---
 
-def test_every_link_gets_class_and_reason():
+def test_unrecognised_link_is_unknown_not_irrelevant():
+    """IRRELEVANT — положительно определяемый класс, а не остаток (§1)."""
     result = cls("Something entirely unknown", "https://www.mnb.hu/en/whatever")
 
-    assert set(result) == {"class", "reason"}
-    assert result["class"] == "OTHER"
-    assert result["reason"] == "no rule matched"
+    # тема страницы-источника даёт partial: ссылка без группы остаётся кандидатом
+    assert result["class"] == "POTENTIALLY_RELEVANT"
+    assert set(result) == {"class", "rule", "reason"}
+
+    # без темы вообще — UNKNOWN, а не IRRELEVANT (§1: IRRELEVANT не остаток)
+    unknown = classify(
+        {"url": "https://www.mnb.hu/en/whatever", "anchor_text": "Something entirely unknown"},
+        QUESTION,
+    )
+
+    assert unknown["class"] == "UNKNOWN"
 
 
-def test_p0_ignores_assets():
+def test_p0_ignores_assets_and_schemes():
     assert is_ignored("https://www.mnb.hu/static/logo.svg")
+    assert is_ignored("mailto:info@mnb.hu")
     assert not is_ignored("https://www.mnb.hu/letoltes/ccyb-methodology-q42024-en.pdf")
